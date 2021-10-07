@@ -1,3 +1,8 @@
+#include <SPI.h>
+#include <EthernetENC.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
+
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);

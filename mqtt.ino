@@ -1,105 +1,65 @@
-#include <SPI.h>
-#include "Adafruit_MQTT.h"
-#include "Adafruit_MQTT_Client.h"
-
-#include <EthernetENC.h>
-#include <EthernetClient.h>
-//#include <Dns.h>
-//#include <Dhcp.h>
-
-const long pingInterval = 30000;
-unsigned long delayStart = 0;
-bool flagPublishProximity = false, delayPingStart = false;
+// Update these with values suitable for your network.
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
+IPAddress ip(192, 168, 178, 22);
+IPAddress server(192, 168, 178, 251);
 
-#define SERVER   "192.168.178.251"
-#define PORT     1883
+const char pulseCountTopic[] = "auger/pulsecount";
 
-IPAddress iotIP (192, 168, 178, 21);
-//Uncomment the following, and set to your preference if you don't have automatic dns.
-IPAddress dnsIP (192, 168, 178, 1);
-//If you uncommented either of the above lines, make sure to change "Ethernet.begin(mac)" to "Ethernet.begin(mac, iotIP)" or "Ethernet.begin(mac, iotIP, dnsIP)"
+EthernetClient ethClient;
+PubSubClient client(ethClient);
 
-const char pulseCount[] = "/auger/pulsecount";
-
-const int ethernetCS = 53;
-
-//Set up the ethernet client
-EthernetClient client;
-Adafruit_MQTT_Client mqtt(&client, SERVER, PORT);
-
-// You don't need to change anything below this line!
-#define halt(s) { Serial.println(F( s )); while(1);  }
-
-// Setup a feed for publishing.
-// Notice MQTT paths for AIO follow the form: <username>/feeds/<feedname>
-Adafruit_MQTT_Publish proximityPublish = Adafruit_MQTT_Publish(&mqtt, pulseCount, MQTT_QOS_1, 1);
-
-// Setup a feed for subscribing to changes.
-Adafruit_MQTT_Subscribe pulseCountSubcription = Adafruit_MQTT_Subscribe(&mqtt, pulseCount, MQTT_QOS_1);
 
 void setupMqttClient() {
-  // Initialise the Client
-  Ethernet.init(ethernetCS);
-  
-  Serial.print(F("\nInit the Client..."));
-  Ethernet.begin(mac, iotIP, dnsIP);
-  delay(1000); //give the ethernet a second to initialize
+  // TODO set proper buffer size
+  //client.setBufferSize(256);
+  client.setServer(server, 1883);
+  client.setCallback(callback);
 
-  //delayStart = millis();
-  delayPingStart = true;
-
-  pulseCountSubcription.setCallback(resetPulseCountCallback);
-
-  mqtt.subscribe(&pulseCountSubcription);
+  Ethernet.begin(mac, ip);
+  // Allow the hardware to sort itself out
+  delay(1500);
 }
-
-uint32_t x = 0;
 
 void mqttLoop() {
-  // Ensure the connection to the MQTT server is alive (this will make the first
-  // connection and automatically reconnect when disconnected).  See the MQTT_connect
-  // function definition further below.
-  MQTT_connect();
+  if (!client.connected()) {
+    reconnect();
+  }
 
-  // this is our 'wait for incoming subscription packets and callback em' busy subloop
-  // try to spend your time here:
-  mqtt.processPackets(1000);
+  client.loop();
+}
 
-  if (delayPingStart &&
-      (millis() - delayStart) >= pingInterval) {
-    // ping the server to keep the mqtt connection alive
-    if (! mqtt.ping()) {
-      mqtt.disconnect();
+void callback(char* topic, byte* payload, unsigned int len) {
+  if (strcmp(pulseCountTopic, topic) == 0) {
+    Serial.println("reset pulse count");
+  }
+}
+
+void reconnect() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect("arduinoClient2")) {
+      Serial.println("connected");
+      // Once connected, publish an announcement...
+      
+
+      // ... and resubscribe
+      client.subscribe(pulseCountTopic);
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
     }
-
-    delayStart = millis();
-    delayPingStart = true;
   }
-
 }
 
-// Function to connect and reconnect as necessary to the MQTT server.
-// Should be called in the loop function and it will take care if connecting.
-void MQTT_connect() {
-  int8_t ret;
-
-  // Stop if already connected.
-  if (mqtt.connected()) {
-    return;
-  }
-
-  Serial.print("Connecting to MQTT... ");
-
-  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
-    Serial.println(mqtt.connectErrorString(ret));
-    Serial.println("Retrying MQTT connection in 5 seconds...");
-    mqtt.disconnect();
-    delay(5000);  // wait 5 seconds
-  }
-  Serial.println("MQTT Connected!");
+void publishPulseCount() {
+  Serial.println("publish pulse count");
 }
 
-void resetPulseCountCallback(char *data, uint16_t len) {
-  Serial.println(data);
+void publishDistance() {
+  
 }
